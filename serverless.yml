@@ -1,0 +1,72 @@
+service: serverless-users-api
+
+plugins:
+  # - serverless-webpack
+  - serverless-plugin-typescript
+  - serverless-dynamodb-local
+  - serverless-offline
+
+custom:
+  # webpack:
+  #   webpackConfig: ./webpack.config.js
+  #   includeModules: true
+  serverless-offline:
+    httpPort: 3003
+  dynamodb:
+    start:
+      port: 5000
+      inMemory: true
+      migrate: true
+    stages:
+      - dev
+
+provider:
+  name: aws
+  runtime: nodejs16.x
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-2'}
+  environment:
+    AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+    USERS_TABLE: Users-${self:provider.stage}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:DescribeTable
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:DeleteItem
+      Resource: "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.USERS_TABLE}"
+
+functions:
+  createUser:
+    handler: ./src/functions/createUserFunction.handler
+    events:
+      - http:
+          method: post
+          path: create-user
+          cors: true
+  getUser:
+    handler: ./src/functions/get-user-function.handler
+    events:
+      - http:
+          method: get
+          path: get-user/{userId}
+          cors: true
+
+resources:
+  Resources:
+    UsersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.USERS_TABLE}
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
